@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neón Hand AR</title>
+    <!-- Cargamos MediaPipe desde CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        video, canvas {
+            position: absolute;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+        }
+        /* Espejo para la cámara frontal opcional, pero para la trasera se usa normal */
+        #canvas {
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Ajustar el tamaño del canvas
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Configurar MediaPipe Hands
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onResults);
+
+        // Función para dibujar el efecto neón
+        function drawConnectors(landmarks, connections, color) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 5;
+            // Efecto de brillo Neón
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 15;
+
+            for (const connection of connections) {
+                const start = landmarks[connection[0]];
+                const end = landmarks[connection[1]];
+
+                ctx.beginPath();
+                ctx.moveTo(start.x * canvas.width, start.y * canvas.height);
+                ctx.lineTo(end.x * canvas.width, end.y * canvas.height);
+                ctx.stroke();
+            }
+            // Resetear el shadow para que no afecte todo
+            ctx.shadowBlur = 0;
+        }
+
+        function onResults(results) {
+            // Limpiar canvas anterior
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (results.multiHandLandmarks) {
+                for (const landmarks of results.multiHandLandmarks) {
+                    // HAND_CONNECTIONS viene integrado en MediaPipe para unir los puntos de los dedos
+                    drawConnectors(landmarks, HAND_CONNECTIONS, '#00e5ff'); 
+                }
+            }
+        }
+
+        // Iniciar la cámara en el iPhone (usando la cámara trasera)
+        const camera = new Camera(video, {
+            onFrame: async () => {
+                await hands.send({image: video});
+            },
+            width: 1280,
+            height: 720,
+            facingMode: 'environment' // 'environment' para trasera, 'user' para selfie
+        });
+        
+        camera.start();
+    </script>
+</body>
+</html>
