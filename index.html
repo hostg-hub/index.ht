@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Jarvis HUD AR</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
+        video, canvas { position: absolute; width: 100vw; height: 100vh; object-fit: cover; }
+        #ui {
+            position: absolute; top: 20px; left: 20px; z-index: 20;
+            background: rgba(0,20,30,0.7); padding: 15px; border-radius: 5px; color: #00f0ff;
+            font-size: 12px; pointer-events: none; border: 1px solid #00f0ff;
+            box-shadow: 0 0 15px rgba(0,240,255,0.3); line-height: 1.5;
+        }
+        #threeCanvas { z-index: 10; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+    <div id="ui">SYSTEM: INITIALIZING... 🤖</div>
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="threeCanvas"></canvas>
+
+    <script>
+        const video = document.getElementById('video');
+        const ui = document.getElementById('ui');
+
+        // --- CONFIGURACIÓN DE THREE.JS ---
+        const tCanvas = document.getElementById('threeCanvas');
+        const scene = new THREE.Scene();
+        const camera3D = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas: tCanvas, alpha: true, antialias: true });
+
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera3D.position.z = 5;
+
+        // GRUPO JARVIS: Contenedor para mover todo el holograma junto
+        const jarvisHUD = new THREE.Group();
+        scene.add(jarvisHUD);
+
+        // 1. EL NÚCLEO (Esfera central estilo reactor Arc)
+        const coreGeo = new THREE.IcosahedronGeometry(0.3, 1);
+        const coreMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff, wireframe: true, transparent: true, opacity: 0.8 });
+        const core = new THREE.Mesh(coreGeo, coreMat);
+        jarvisHUD.add(core);
+
+        // 2. ANILLO EXTERIOR DE ESCANEO
+        const ringGeo1 = new THREE.RingGeometry(0.6, 0.7, 30);
+        const ringMat1 = new THREE.MeshBasicMaterial({ color: 0x00f0ff, side: THREE.DoubleSide, wireframe: true, transparent: true, opacity: 0.6 });
+        const ring1 = new THREE.Mesh(ringGeo1, ringMat1);
+        jarvisHUD.add(ring1);
+
+        // 3. ANILLO INTERIOR EN CAJA
+        const ringGeo2 = new THREE.RingGeometry(0.45, 0.5, 4);
+        const ringMat2 = new THREE.MeshBasicMaterial({ color: 0x00f0ff, side: THREE.DoubleSide, wireframe: true, transparent: true, opacity: 0.5 });
+        const ring2 = new THREE.Mesh(ringGeo2, ringMat2);
+        jarvisHUD.add(ring2);
+
+        // Animación de los componentes del holograma
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Rotaciones cruzadas estilo Jarvis
+            core.rotation.x += 0.02;
+            core.rotation.y -= 0.02;
+            ring1.rotation.z += 0.01;
+            ring2.rotation.z -= 0.03;
+
+            renderer.render(scene, camera3D);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera3D.aspect = window.innerWidth / window.innerHeight;
+            camera3D.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- CONFIGURACIÓN DE MEDIAPIPE ---
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 0,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onResults);
+
+        function onResults(results) {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                
+                // SEGUIMIENTO: Punto 9 (centro de la palma)
+                const palm = landmarks[9]; 
+                const targetX = (palm.x - 0.5) * -6; 
+                const targetY = (palm.y - 0.5) * -4.5; 
+
+                // Movimiento suave hacia la palma
+                jarvisHUD.position.x += (targetX - jarvisHUD.position.x) * 0.3;
+                jarvisHUD.position.y += (targetY - jarvisHUD.position.y) * 0.3;
+
+                // ESCALA: Distancia entre Pulgar (4) e Índice (8)
+                const thumb = landmarks[4];
+                const index = landmarks[8];
+                const distance = Math.hypot(thumb.x - index.x, thumb.y - index.y);
+                let scale = Math.max(0.4, distance * 5);
+                jarvisHUD.scale.set(scale, scale, scale);
+
+                // ROTACIÓN INTERACTIVA (Inclinación basada en la muñeca)
+                const wrist = landmarks[0];
+                jarvisHUD.rotation.x = (palm.y - wrist.y) * 4;
+                jarvisHUD.rotation.y = (palm.x - wrist.x) * 4;
+
+                // Interfaz de texto tipo Hacker/Jarvis
+                const sysStatus = Math.random() > 0.85 ? "SCANNING..." : "STABLE";
+                ui.innerHTML = `
+                    [ JARVIS OS v4.26 ]<br>
+                    -------------------<br>
+                    STATUS: ${sysStatus}<br>
+                    TARGET_X: ${targetX.toFixed(2)}<br>
+                    TARGET_Y: ${targetY.toFixed(2)}<br>
+                    HUD_SCALE: ${Math.round(scale * 100)}%<br>
+                    ENERGY_CORE: 98.4%
+                `;
+            } else {
+                ui.innerHTML = "[ JARVIS OS ]<br>NO HAND DETECTED.<br>AWAITING INTERACTION...";
+            }
+        }
+
+        const camera = new Camera(video, {
+            onFrame: async () => {
+                await hands.send({image: video});
+            },
+            width: 640,
+            height: 480,
+            facingMode: 'environment'
+        });
+        
+        camera.start();
+    </script>
+</body>
+</html>
