@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Pro AR Gesture Control</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+        video, canvas { position: absolute; width: 100vw; height: 100vh; object-fit: cover; }
+        #ui {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 20;
+            background: rgba(0,0,0,0.8); padding: 12px 24px; border-radius: 20px; color: #00ffcc;
+            font-weight: bold; pointer-events: none; border: 2px solid #00ffcc; text-align: center;
+        }
+        #threeCanvas { z-index: 10; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+    <div id="ui">MUESTRA TU MANO 👋</div>
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="threeCanvas"></canvas>
+
+    <script>
+        const video = document.getElementById('video');
+        const ui = document.getElementById('ui');
+
+        // --- CONFIGURACIÓN DE THREE.JS ---
+        const tCanvas = document.getElementById('threeCanvas');
+        const scene = new THREE.Scene();
+        
+        // Usamos una cámara ortográfica o perspectiva ajustada para WebAR
+        const camera3D = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas: tCanvas, alpha: true, antialias: true });
+
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera3D.position.set(0, 0, 5);
+
+        // ILUMINACIÓN: Necesaria para que un objeto relleno (sólido) se pueda ver bien
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0x00ffcc, 1);
+        directionalLight.position.set(5, 5, 5);
+        scene.add(directionalLight);
+
+        // CUBO RELLENO: Usamos MeshStandardMaterial en lugar de líneas
+        const geometry = new THREE.BoxGeometry(1, 1, 1);
+        const material = new THREE.MeshStandardMaterial({ 
+            color: 0x00ffcc, 
+            roughness: 0.3,
+            metalness: 0.8
+        });
+        const cube = new THREE.Mesh(geometry, material);
+        scene.add(cube);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera3D);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera3D.aspect = window.innerWidth / window.innerHeight;
+            camera3D.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- CONFIGURACIÓN DE MEDIAPIPE ---
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 0,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onResults);
+
+        function onResults(results) {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                
+                // 1. SEGUIMIENTO (Mover el cubo a donde esté la palma)
+                // El punto 9 es el centro de la mano (base del dedo medio)
+                const palm = landmarks[9]; 
+                
+                // Convertimos las coordenadas de MediaPipe (0 a 1) al espacio 3D de Three.js (-3 a 3 aprox)
+                // Invertimos el eje X si usas la cámara trasera o delantera según corresponda
+                const targetX = (palm.x - 0.5) * -6; 
+                const targetY = (palm.y - 0.5) * -4.5; 
+
+                // Suavizado de posición para que no brinque feo el cubo
+                cube.position.x += (targetX - cube.position.x) * 0.3;
+                cube.position.y += (targetY - cube.position.y) * 0.3;
+
+                // 2. ESCALA (Hacer grande/chico con pulgar [4] e índice [8])
+                const thumb = landmarks[4];
+                const index = landmarks[8];
+                const distance = Math.hypot(thumb.x - index.x, thumb.y - index.y);
+                let newScale = Math.max(0.3, distance * 6);
+                cube.scale.set(newScale, newScale, newScale);
+
+                // 3. ROTACIÓN (Girar el cubo usando la inclinación de la mano)
+                // Medimos el ángulo entre la muñeca (0) y el dedo medio (9)
+                const wrist = landmarks[0];
+                const angleX = (palm.y - wrist.y) * 5;
+                const angleY = (palm.x - wrist.x) * 5;
+
+                cube.rotation.x = angleX;
+                cube.rotation.y = angleY;
+
+                ui.innerText = `Cubo Anclado a tu Mano 🔮\nEscala: ${Math.round(newScale * 100)}%`;
+            } else {
+                ui.innerText = "👋 MUESTRA TU MANO";
+            }
+        }
+
+        const camera = new Camera(video, {
+            onFrame: async () => {
+                await hands.send({image: video});
+            },
+            width: 640,
+            height: 480,
+            facingMode: 'environment'
+        });
+        
+        camera.start();
+    </script>
+</body>
+</html>
