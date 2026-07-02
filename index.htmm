@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AR Gesture Scale</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+        video, canvas { position: absolute; width: 100vw; height: 100vh; object-fit: cover; }
+        #ui {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 20;
+            background: rgba(0,0,0,0.8); padding: 12px 24px; border-radius: 20px; color: #ff007f;
+            font-weight: bold; pointer-events: none; border: 2px solid #ff007f; text-align: center;
+        }
+        #threeCanvas { z-index: 10; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+    <div id="ui">MUESTRA TU MANO 👋</div>
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="threeCanvas"></canvas>
+
+    <script>
+        const video = document.getElementById('video');
+        const ui = document.getElementById('ui');
+
+        // --- CONFIGURACIÓN DE TREE.JS (MUNDO 3D) ---
+        const tCanvas = document.getElementById('threeCanvas');
+        const scene = new THREE.Scene();
+        const camera3D = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas: tCanvas, alpha: true }); // alpha: true permite ver el video de fondo
+
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera3D.position.z = 5;
+
+        // Crear un cubo de líneas neón magenta
+        const geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+        const edges = new THREE.EdgesGeometry(geometry);
+        const material = new THREE.LineBasicMaterial({ color: 0xff007f, linewidth: 2 });
+        const cube = new THREE.LineSegments(edges, material);
+        scene.add(cube);
+
+        // Animación básica de rotación constante para que se vea vivo el objeto
+        function animate() {
+            requestAnimationFrame(animate);
+            cube.rotation.x += 0.01;
+            cube.rotation.y += 0.01;
+            renderer.render(scene, camera3D);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera3D.aspect = window.innerWidth / window.innerHeight;
+            camera3D.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- CONFIGURACIÓN DE MEDIAPIPE (DETECCIÓN) ---
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 0, // Máxima velocidad para celulares
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onResults);
+
+        function onResults(results) {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                
+                // Medir distancia tridimensional simulada entre la punta del pulgar (4) y del índice (8)
+                const thumb = landmarks[4];
+                const index = landmarks[8];
+                const distance = Math.hypot(thumb.x - index.x, thumb.y - index.y);
+
+                // Convertir esa distancia en una escala lógica para el objeto 3D
+                // Multiplicamos para notar más el cambio. El valor mínimo será 0.2 para que no desaparezca.
+                let newScale = Math.max(0.2, distance * 8); 
+
+                // Aplicar escala al cubo en los 3 ejes
+                cube.scale.set(newScale, newScale, newScale);
+
+                // Mostrar el porcentaje de tamaño actual en la UI
+                ui.innerText = `GESTO: ESCALANDO\nTAMAÑO: ${Math.round(newScale * 100)}%`;
+            } else {
+                ui.innerText = "👋 MUESTRA TU MANO";
+            }
+        }
+
+        // Iniciar cámara del iPhone
+        const camera = new Camera(video, {
+            onFrame: async () => {
+                await hands.send({image: video});
+            },
+            width: 640,
+            height: 480,
+            facingMode: 'environment'
+        });
+        
+        camera.start();
+    </script>
+</body>
+</html>
