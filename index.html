@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Quantum HUD Premium</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Courier New', Courier, monospace; }
+        video, canvas { position: absolute; width: 100vw; height: 100vh; object-fit: cover; }
+        #ui-container {
+            position: absolute; top: 20px; left: 20px; z-index: 20;
+            background: rgba(0, 10, 15, 0.85); padding: 18px; border-radius: 4px; color: #00ffaa;
+            font-size: 11px; pointer-events: none; border-left: 3px solid #00ffaa;
+            box-shadow: 0 0 20px rgba(0,255,170,0.15); line-height: 1.6;
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        #threeCanvas { z-index: 10; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+    <div id="ui-container">SYSTEM STATUS: LOADING CORE QUANTUM ENGINE...</div>
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="threeCanvas"></canvas>
+
+    <script>
+        const video = document.getElementById('video');
+        const ui = document.getElementById('ui-container');
+
+        // --- CONFIGURACIÓN AVANZADA DE THREE.JS ---
+        const tCanvas = document.getElementById('threeCanvas');
+        const scene = new THREE.Scene();
+        const camera3D = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas: tCanvas, alpha: true, antialias: true });
+
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Optimiza resolución en pantallas Retina
+        camera3D.position.z = 6;
+
+        // Contenedor maestro del artefacto cuántico
+        const quantumArtifact = new THREE.Group();
+        scene.add(quantumArtifact);
+
+        // 1. EFECTO PREMIUM: Nube de Partículas (Polvo de Estrellas)
+        const particleCount = 200;
+        const particleGeo = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+
+        for(let i = 0; i < particleCount * 3; i++) {
+            positions[i] = (Math.random() - 0.5) * 2.5; // Dispersión inicial
+        }
+
+        particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const particleMat = new THREE.PointsMaterial({
+            color: 0x00ffaa,
+            size: 0.04,
+            transparent: true,
+            opacity: 0.7,
+            blending: THREE.AdditiveBlending // Hace que brillen más cuando se enciman
+        });
+        const particleSystem = new THREE.Points(particleGeo, particleMat);
+        quantumArtifact.add(particleSystem);
+
+        // 2. ESTRUCTURA CENTRAL: Toroide Magnético Translúcido
+        const torusGeo = new THREE.TorusGeometry(0.6, 0.05, 8, 24);
+        const torusMat = new THREE.MeshBasicMaterial({ 
+            color: 0x00aaff, 
+            wireframe: true, 
+            transparent: true, 
+            opacity: 0.4 
+        });
+        const torus = new THREE.Mesh(torusGeo, torusMat);
+        quantumArtifact.add(torus);
+
+        // 3. NÚCLEO GEOMÉTRICO: Icosaedro Premium Interno
+        const coreGeo = new THREE.IcosahedronGeometry(0.3, 0);
+        const coreMat = new THREE.MeshBasicMaterial({ 
+            color: 0xff00aa, 
+            wireframe: true, 
+            transparent: true, 
+            opacity: 0.9 
+        });
+        const core = new THREE.Mesh(coreGeo, coreMat);
+        quantumArtifact.add(core);
+
+        // Animación matemática de las capas del holograma
+        let clock = new THREE.Clock();
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const elapsedTime = clock.getElapsedTime();
+
+            // Rotaciones asíncronas para efecto orgánico y complejo
+            core.rotation.x = elapsedTime * 0.8;
+            core.rotation.y = elapsedTime * 0.5;
+            
+            torus.rotation.y = -elapsedTime * 0.4;
+            torus.rotation.z = elapsedTime * 0.2;
+            
+            particleSystem.rotation.z = elapsedTime * 0.15;
+            
+            // Efecto pulsante en el sistema de partículas (se expande y contrae solo)
+            const pulse = 1 + Math.sin(elapsedTime * 2) * 0.08;
+            particleSystem.scale.set(pulse, pulse, pulse);
+
+            renderer.render(scene, camera3D);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera3D.aspect = window.innerWidth / window.innerHeight;
+            camera3D.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- CONFIGURACIÓN DE MEDIAPIPE ---
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 0,
+            minDetectionConfidence: 0.45,
+            minTrackingConfidence: 0.45
+        });
+
+        hands.onResults(onResults);
+
+        function onResults(results) {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                
+                // SEGUIMIENTO MATEMÁTICO: Anclaje al punto 9 (Palma)
+                const palm = landmarks[9]; 
+                const targetX = (palm.x - 0.5) * -6.5; 
+                const targetY = (palm.y - 0.5) * -4.8; 
+
+                // Interpolación ultra suave para eliminar vibraciones lerdas del sensor
+                quantumArtifact.position.x += (targetX - quantumArtifact.position.x) * 0.25;
+                quantumArtifact.position.y += (targetY - quantumArtifact.position.y) * 0.25;
+
+                // ESCALA DINÁMICA: Distancia Pulgar (4) e Índice (8)
+                const thumb = landmarks[4];
+                const index = landmarks[8];
+                const distance = Math.hypot(thumb.x - index.x, thumb.y - index.y);
+                let currentScale = Math.max(0.4, distance * 5.5);
+                
+                // Suavizado también en el cambio de tamaño
+                quantumArtifact.scale.lerp(new THREE.Vector3(currentScale, currentScale, currentScale), 0.2);
+
+                // ROTACIÓN EN 3D: Basada en la orientación de la muñeca (0) al dedo medio (9)
+                const wrist = landmarks[0];
+                const rotX = (palm.y - wrist.y) * 3.5;
+                const rotY = (palm.x - wrist.x) * 3.5;
+                
+                quantumArtifact.rotation.x += (rotX - quantumArtifact.rotation.x) * 0.2;
+                quantumArtifact.rotation.y += (rotY - quantumArtifact.rotation.y) * 0.2;
+
+                // FLUJO DE DATOS PREMIUM (UI)
+                const neuralFreq = (100 + Math.random() * 800).toFixed(0);
+                const syncRate = (85 + Math.random() * 14).toFixed(1);
+                
+                ui.innerHTML = `
+                    // QUANTUM LINK ESTABLISHED //<br>
+                    ------------------------------<br>
+                    CORE MATRIX : ONLINE<br>
+                    NEURAL FREQ : ${neuralFreq} GHz<br>
+                    SYNC RATE   : ${syncRate} %<br>
+                    FIELD SCALE : ${(currentScale * 10).toFixed(1)} LY<br>
+                    VECTOR_XYZ  : [${targetX.toFixed(1)}, ${targetY.toFixed(1)}, ${(distance*10).toFixed(1)}]<br>
+                    GRID STATUS : SECURE_THREAT_0
+                `;
+                ui.style.color = "#00ffaa";
+                ui.style.borderColor = "#00ffaa";
+            } else {
+                ui.innerHTML = "// SYSTEM IDLE //<br>AWAITING NEURAL HANDPRINT...<br>SEARCHING TARGET CONTEXT...";
+                ui.style.color = "#ff0055";
+                ui.style.borderColor = "#ff0055";
+            }
+        }
+
+        const camera = new Camera(video, {
+            onFrame: async () => {
+                await hands.send({image: video});
+            },
+            width: 640,
+            height: 480,
+            facingMode: 'environment'
+        });
+        
+        camera.start();
+    </script>
+</body>
+</html>
